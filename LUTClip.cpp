@@ -6,12 +6,12 @@
 #include <cmath>
 #include <stdint.h>
 
-#define PICK_TEMPLATE(bitDepth, template_function) \
-  bitDepth == 8 ?  template_function <uint8_t> : \
-  bitDepth == 32 ? template_function <uint32_t> : \
-                   template_function <uint16_t>
+#define RUN_TEMPLATE1(bitDepth, template_function) \
+  bitDepth == 8 ?  template_function <uint8_t> () : \
+  bitDepth == 32 ? template_function <uint32_t> () : \
+                   template_function <uint16_t> ()
 
-#define PICK_TEMPLATE(srcBitDepth, dstBitDepth, template_function) \
+#define PICK_TEMPLATE2(srcBitDepth, dstBitDepth, template_function) \
   srcBitDepth == 8 ? \
     dstBitDepth == 8 ?  template_function <uint8_t,uint8_t> : \
     dstBitDepth == 32 ? template_function <uint8_t,uint32_t> : \
@@ -37,11 +37,11 @@ int getPixelTypeAccordingToBitDepth(int generic_flag, int bitDepth) {
   return 0;
 }
 
-int const planes_y[1] = {PLANAR_Y},
-          planes_yuv[3] = {PLANAR_Y, PLANAR_U, PLANAR_V},
-          planes_yuva[4] = {PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A},
-          planes_rgb[3] = {PLANAR_R, PLANAR_G, PLANAR_B},
-          planes_rgba[4] = {PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A};
+std::vector<int> planes_y = {PLANAR_Y},
+                 planes_yuv = {PLANAR_Y, PLANAR_U, PLANAR_V},
+                 planes_yuva = {PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A},
+                 planes_rgb = {PLANAR_R, PLANAR_G, PLANAR_B},
+                 planes_rgba = {PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A};
 
 class LUTClip : public IClip {
 
@@ -55,7 +55,7 @@ private:
   std::vector<int> planes;
   int clip_id;
   
-  template<typename pixel_t> write_planar_lut() {
+  template<typename pixel_t> void write_planar_lut() {
     int value_repetitions = (int) pow(num_values, clip_id);
     pixel_t mask = (pixel_t) (num_values - 1);
     for (int p = 0; p < num_planes; ++p) {
@@ -77,12 +77,12 @@ public:
     if (dimensions == 2) {
       if(bitDepth > 12)
         env->ThrowError("LUTClip: Cannot prepare a 2D LUT for bit depths higher than 12");
-      if(src_num != 1 && src_num != 2)
+      if(src_num < 1 || 2 < src_num)
         env->ThrowError("LUTClip: (2D) \"src_num\" must be either 1 or 2.");
     } else if (dimensions == 3) {
       if (bitDepth > 8)
         env->ThrowError("LUTClip: Cannot prepare a 3D LUT for bit depths higher than 8");
-      if(lstrcmpi(id, "x") != 0 && lstrcmpi(id, "y") != 0 && lstrcmpi(id, "z") != 0)
+      if(src_num < 1 || 3 < src_num)
         env->ThrowError("LUTClip: (3D) \"src_num\" must be either 1, 2 or 3.");
     }
     
@@ -111,7 +111,7 @@ public:
     } else
       env->ThrowError("LUTClip: Invalid selection of planes.");
     
-    num_planes = planes.size();
+    num_planes = (int) planes.size();
     clip_id = src_num;
     num_values = 1 << bitDepth;
     width = (int) pow(num_values, dimensions);
@@ -125,7 +125,7 @@ public:
     
     frame = env->NewVideoFrame(vi);
     
-    PICK_TEMPLATE(bitDepth, write_planar_lut)();
+    RUN_TEMPLATE1(bitDepth, write_planar_lut);
     
   }
 
@@ -137,9 +137,9 @@ public:
   
   static AVSValue __cdecl Create_LUTClip(AVSValue args, void*, IScriptEnvironment* env) {
     if (!args[0].Defined())
-      env->("LUTClip: Parameter \"dimensions\" was not given a value.");
+      env->ThrowError("LUTClip: Parameter \"dimensions\" was not given a value.");
     if (!args[1].Defined())
-      env->("LUTClip: Parameter \"planes\" was not given a value.");
+      env->ThrowError("LUTClip: Parameter \"planes\" was not given a value.");
     return new LUTClip(args[0].AsInt(), args[1].AsString(), args[2].AsInt(1), args[3].AsInt(8), env);
   }
   
@@ -164,6 +164,9 @@ private:
   int num_dst_planes;
   std::vector<int> dst_planes, dst_width, dst_height;
   
+  // Pointer to wrapper function
+  void(ApplyLUT::*wrapper_to_use) (std::vector<PVideoFrame>& src, PVideoFrame dst);
+
   enum Condition {
     SRC_SAME_RES,
     SRC_NO_SUBSAMPLING,
@@ -178,9 +181,9 @@ private:
   
   void fillSrcAndLutInfo(IScriptEnvironment* env) {
     
-    num_src_clips = src_clips.size();
+    num_src_clips = (int) src_clips.size();
     vi_src = std::vector<VideoInfo> (num_src_clips);
-    src_planes = std::vector<vector<int>> (num_src_clips);
+    src_planes = std::vector<std::vector<int>> (num_src_clips);
     int min_num_planes = 3;
     for (int sc = 0; sc < num_src_clips; ++sc) {
       vi_src[sc] = src_clips[sc]->GetVideoInfo();
@@ -189,18 +192,18 @@ private:
                     : vi_src[sc].pixel_type&VideoInfo::CS_YUVA ? planes_yuva
                     : vi_src[sc].pixel_type&VideoInfo::CS_RGB_TYPE ? planes_rgb
                     : planes_rgba;
-      min_num_planes = min(src_planes[sc].size(), min_num_planes);
+      min_num_planes = min((int) src_planes[sc].size(), min_num_planes);
     }
     num_src_planes = min_num_planes;
     
-    src_width = vector<vector<int>> (num_src_clips, vector<int>(num_src_planes));
-    src_height = vector<vector<int>> (num_src_clips, vector<int>(num_src_planes));
+    src_width = std::vector<std::vector<int>> (num_src_clips, std::vector<int>(num_src_planes));
+    src_height = std::vector<std::vector<int>> (num_src_clips, std::vector<int>(num_src_planes));
     for (int sc = 0; sc < num_src_clips; ++sc) {
       src_width[sc][0] = vi_src[sc].width;
       src_height[sc][0] = vi_src[sc].height;
       for (int sp = 1; sp < num_src_planes; ++sp) {
-        src_width[sc][sp] = src_width[sc][0] >> VideoInfo::GetPlaneWidthSubsampling(src_planes[sc][sp]);
-        src_height[sc][sp] = src_height[sc][0] >> VideoInfo::GetPlaneHeightSubsampling(src_planes[sc][sp]);
+        src_width[sc][sp] = src_width[sc][0] >> vi_src[sc].VideoInfo::GetPlaneWidthSubsampling(src_planes[sc][sp]);
+        src_height[sc][sp] = src_height[sc][0] >> vi_src[sc].VideoInfo::GetPlaneHeightSubsampling(src_planes[sc][sp]);
       }
     }
     
@@ -220,8 +223,8 @@ private:
       env->ThrowError("ApplyLUT: The provided LUT clip was expected to have a width of %d pixels,\ndue to the source bit depth being %d, but got %d pixels instead.", src_num_values, srcBitDepth, vi_lut.width);
     
     dstBitDepth = vi_lut.BitsPerComponent();    
-    src_pitch_divider = pitchDivider(srcBitDepth);
-    dst_pitch_divider = pitchDivider(dstBitDepth);
+    src_pitch_bitshift = pitchBitShift(srcBitDepth);
+    dst_pitch_bitshift = pitchBitShift(dstBitDepth);
     
     lut = lut_clip->GetFrame(0, env);
   }
@@ -259,7 +262,7 @@ private:
     num_src_planes = 1;
   }
   
-  int generateSubsampledPixelType() {
+  int generateSubsampledPixelType(IScriptEnvironment* env) {
     
     if (num_src_clips == 1) {
       if (num_src_planes == 1 || vi_src[0].Is444() || vi_src[0].IsRGB())
@@ -277,22 +280,22 @@ private:
         env->ThrowError("ApplyLUT: The 2nd and 3rd source clips, which will be taken as U and V planes,\nmust have the same resolution.");
       
       // CS_Sub_Width_2 and CS_Sub_Height_2 are 0, pixel_type bitfield can be or'd if change needed
-      int generic_flag = vi_lut.IsYUVA() VideoInfo::CS_GENERIC_YUVA420 : VideoInfo::CS_GENERIC_YUV420;
+      int generic_flag = vi_lut.IsYUVA() ? VideoInfo::CS_GENERIC_YUVA420 : VideoInfo::CS_GENERIC_YUV420;
       int pixel_type = getPixelTypeAccordingToBitDepth(generic_flag, dstBitDepth);
 
-      if (src_width[0][0] ==   src_width[1][0])
-        pixel_type |= VideoInfo::CS_Sub_Width_1:
+      if (src_width[0][0] == src_width[1][0])
+        pixel_type |= VideoInfo::CS_Sub_Width_1;
       else if (src_width[0][0] == 2*src_width[1][0])
-        pixel_type |= VideoInfo::CS_Sub_Width_2:
+        pixel_type |= VideoInfo::CS_Sub_Width_2;
       else if (src_width[0][0] == 4*src_width[1][0])
         pixel_type |= VideoInfo::CS_Sub_Width_4;
       else
         env->ThrowError("ApplyLUT: Could not produce a subsampled color format\nfrom the width of the 2nd and 3rd source clips.");
 
-      if (src_height[0][0] ==   src_height[1][0])
-        pixel_type |= VideoInfo::CS_Sub_Height_1:
+      if (src_height[0][0] == src_height[1][0])
+        pixel_type |= VideoInfo::CS_Sub_Height_1;
       else if (src_height[0][0] == 2*src_height[1][0])
-        pixel_type |= VideoInfo::CS_Sub_Height_2:
+        pixel_type |= VideoInfo::CS_Sub_Height_2;
       else if (src_height[0][0] == 4*src_height[1][0])
         pixel_type |= VideoInfo::CS_Sub_Height_4;
       else
@@ -326,8 +329,8 @@ private:
           takeFirstPlaneFromEachSource();
           vi.pixel_type = vi_lut.pixel_type;
         } else
-          vi.pixel_type = generateSubsampledPixelType();
-        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_1plane_to_1plane_wrapper);
+          vi.pixel_type = generateSubsampledPixelType(env);
+        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_1plane_wrapper);
         break;
       case 2:
         if (lut_dimensions != 1)
@@ -335,19 +338,18 @@ private:
         if (num_dst_planes < 3)
           env->ThrowError("ApplyLUT: In mode 2, the LUT clip cannot have only 1 plane (Y).");
         if (num_src_clips != 1)
-          env->ThrowError("ApplyLUT: Mode 2 can only accept 1 source clip, but got %d instead.", %d);
+          env->ThrowError("ApplyLUT: Mode 2 can only accept 1 source clip, but got %d instead.", num_src_clips);
         if (conditionNotFulfilled(SRC_NOT_INTERLEAVED))
           env->ThrowError("ApplyLUT: Mode 2 doesn't support source clips with interleaved format.");
         if (conditionNotFulfilled(DST_NOT_YUV_INTERLEAVED))
           env->ThrowError("ApplyLUT: Mode 2 doesn't support YUV interleaved destination formats.");
         takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
-        wrapper_to_use = vi.pixel_type&(VideoInfo::CS_RGB24|VideoInfo::CS_RGB48) ?
-                          PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_1plane_to_3plane_rgb_wrapper)
-                        : vi.pixel_type&(VideoInfo::CS_RGB32|VideoInfo::CS_RGB64) ?
-                          PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_1plane_to_3plane_rgba_wrapper)
-                        :
-                          PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_1plane_to_3plane_wrapper)
+        wrapper_to_use = vi.pixel_type&(VideoInfo::CS_BGR24|VideoInfo::CS_BGR48) ?
+                          PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgb_wrapper)
+                        : vi.pixel_type&(VideoInfo::CS_BGR32|VideoInfo::CS_BGR64) ?
+                          PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgba_wrapper)
+                        : PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_wrapper);
         break;
       case 3:
         if (lut_dimensions != 2)
@@ -364,8 +366,8 @@ private:
           takeFirstPlaneFromEachSource();
           vi.pixel_type = vi_lut.pixel_type;
         } else
-          vi.pixel_type = generateSubsampledPixelType();
-        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_2plane_to_1plane_wrapper);
+          vi.pixel_type = generateSubsampledPixelType(env);
+        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_1plane_wrapper);
         break;
       case 4:
         if (lut_dimensions != 2)
@@ -382,7 +384,7 @@ private:
           env->ThrowError("ApplyLUT: Mode 4 doesn't support an interleaved destination format.");
         takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
-        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_2plane_to_3plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_3plane_wrapper);
         break;
       case 5: 
         if (lut_dimensions != 3)
@@ -404,8 +406,8 @@ private:
         } else if (num_src_clips == 1 || num_src_planes == 1)
           vi.pixel_type = vi_lut.pixel_type;
         else // num_src_clips == 3 && num_src_planes == 3
-          vi.pixel_type = generateSubsampledPixelType();
-        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_3plane_to_1plane_wrapper);
+          vi.pixel_type = generateSubsampledPixelType(env);
+        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_1plane_wrapper);
         break;
       case 6:
         if (lut_dimensions != 3)
@@ -428,7 +430,7 @@ private:
         } else // num_src_clips == 3
           takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
-        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, write_3plane_to_3plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_3plane_wrapper);
         break;
     }
   }
@@ -440,31 +442,27 @@ private:
                 : vi.pixel_type&VideoInfo::CS_YUVA ? planes_yuva
                 : vi.pixel_type&VideoInfo::CS_RGB_TYPE ? planes_rgb
                 : planes_rgba;
-    num_dst_planes = dst_planes.size();
+    num_dst_planes = (int) dst_planes.size();
     
-    dst_width = vector<int>(num_dst_planes);
-    dst_height = vector<int>(num_dst_planes);
+    dst_width = std::vector<int>(num_dst_planes);
+    dst_height = std::vector<int>(num_dst_planes);
     dst_width[0] = vi.width;
     dst_height[0] = vi.height;
     for (int dp = 1; dp < num_dst_planes; ++dp) {
-      dst_width[dp] = dst_width[0] >> VideoInfo::GetPlaneWidthSubsampling(dst_planes[dp]);
-      dst_height[dp] = dst_height[0] >> VideoInfo::GetPlaneHeightSubsampling(dst_planes[dp]);
+      dst_width[dp] = dst_width[0] >> vi.VideoInfo::GetPlaneWidthSubsampling(dst_planes[dp]);
+      dst_height[dp] = dst_height[0] >> vi.VideoInfo::GetPlaneHeightSubsampling(dst_planes[dp]);
     }
     
-  }
-  
-  template <typename src_pixel_t, typename dst_pixel_t> static void min(int a, int b) {
-    return a <= b ? a : b;
   }
   
   template <typename src_pixel_t, typename dst_pixel_t> \
   void write_1plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame dst) {
     for (int dp = 0; dp < num_dst_planes; ++dp) {
-      int sp = min(i, num_src_planes),
-          sc = min(i, num_src_clips);
+      int sp = min(dp, num_src_planes),
+          sc = min(dp, num_src_clips);
         
-      int src_pitch = src[sc]->GetPitch(src_planes[sp]) >> src_pitch_bitshift;
-      const src_pixel_t* srcp = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sp]);
+      int src_pitch = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
+      const src_pixel_t* srcp = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
       const dst_pixel_t* lutp = (const dst_pixel_t*) lut->GetReadPtr(dst_planes[dp]);
       int dst_pitch = dst->GetPitch(dst_planes[dp]) >> dst_pitch_bitshift;
       dst_pixel_t* dstp = (dst_pixel_t*) dst->GetWritePtr(dst_planes[dp]);
@@ -492,8 +490,8 @@ private:
   template <typename src_pixel_t, typename dst_pixel_t> \
   void write_1plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame dst) {
     
-    int src_pitch = src[0]->GetPitch(src_planes[0]) >> src_pitch_bitshift;
-    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0]);
+    int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
+    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
     
     const dst_pixel_t* lutp[3];
     int dst_pitch[3];
@@ -534,12 +532,12 @@ private:
   template <typename src_pixel_t, typename dst_pixel_t> \
   void write_1plane_to_3plane_packed_rgb_wrapper (std::vector<PVideoFrame>& src, PVideoFrame dst) {
     
-    int src_pitch = src[0]->GetPitch(src_planes[0]) >> src_pitch_bitshift;
-    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0]);
+    int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
+    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
     
     int dst_pitch = dst->GetPitch() >> dst_pitch_bitshift;
-    const dst_pixel_t* lutp = lut->GetReadPtr();
-    dst_pixel_t* dstp = dst->GetWritePtr();
+    const dst_pixel_t* lutp = (const dst_pixel_t*) lut->GetReadPtr();
+    dst_pixel_t* dstp = (dst_pixel_t*) dst->GetWritePtr();
     
     write_1plane_to_3plane_packed_rgb <src_pixel_t, dst_pixel_t> \
     (src_pitch, srcp, dst_pitch, lutp, dstp, dst_width[0], dst_height[0]);
@@ -570,12 +568,12 @@ private:
   template <typename src_pixel_t, typename dst_pixel_t> \
   void write_1plane_to_3plane_packed_rgba_wrapper (std::vector<PVideoFrame>& src, PVideoFrame dst) {
     
-    int src_pitch = src[0]->GetPitch(src_planes[0]) >> src_pitch_bitshift;
-    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0]);
+    int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
+    const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
     
     int dst_pitch = dst->GetPitch() >> dst_pitch_bitshift;
-    const dst_pixel_t* lutp = lut->GetReadPtr();
-    dst_pixel_t* dstp = dst->GetWritePtr();
+    const dst_pixel_t* lutp = (const dst_pixel_t*) lut->GetReadPtr();
+    dst_pixel_t* dstp = (dst_pixel_t*) dst->GetWritePtr();
     
     write_1plane_to_3plane_packed_rgba <src_pixel_t, dst_pixel_t> \
     (src_pitch, srcp, dst_pitch, lutp, dstp, dst_width[0], dst_height[0]);
@@ -615,10 +613,10 @@ private:
       const src_pixel_t* srcp[2];
       
       for (int i = 0; i < 2; ++i) {
-        int sc = min(i, num_src_clips);
+        int sc = min(i, num_src_clips),
             sp = min(dp, num_src_planes);
-        src_pitch[i] = src[sc]->GetPitch(src_planes[sp]) >> src_pitch_bitshift;
-        srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sp]);
+        src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
+        srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
       }
       
       write_2plane_to_1plane <src_pixel_t, dst_pixel_t> \
@@ -636,7 +634,7 @@ private:
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         int a = srcp[0][x], b = srcp[1][x];
-        dstp[x] = lutp[b << srcBitDepth + a];
+        dstp[x] = lutp[(b << srcBitDepth) + a];
       }
       srcp[0] += src_pitch[0];
       srcp[1] += src_pitch[1];
@@ -651,19 +649,20 @@ private:
     int src_pitch[2];
     const src_pixel_t* srcp[2];
     
-    for (int c = 0; c < num_src_clips; ++c) {
-      src_pitch[c] = src[c]->GetPitch(src_planes[0]) >> src_pitch_bitshift;
-      srcp[c] = (const src_pixel_t*) src[c]->GetReadPtr(src_planes[0]);
+    for (int i = 0; i < 2; ++i) {
+      int sc = min(i, num_src_clips);
+      src_pitch[i] = src[sc]->GetPitch(src_planes[sc][0]) >> src_pitch_bitshift;
+      srcp[i] = (const src_pixel_t*)src[sc]->GetReadPtr(src_planes[sc][0]);
     }
-    
+
     const dst_pixel_t* lutp[3];
     int dst_pitch[3];
     dst_pixel_t* dstp[3];
     
-    for (int p = 0; p < num_dst_planes; ++p) {
-      lutp[p] = (const dst_pixel_t*) lut->GetReadPtr(dst_planes[p]);
-      dst_pitch[p] = dst->GetPitch(dst_planes[p]) >> dst_pitch_bitshift;
-      dstp[p] = (dst_pixel_t*) dst->GetWritePtr(dst_planes[p]);
+    for (int dp = 0; dp < num_dst_planes; ++dp) {
+      lutp[dp] = (const dst_pixel_t*) lut->GetReadPtr(dst_planes[dp]);
+      dst_pitch[dp] = dst->GetPitch(dst_planes[dp]) >> dst_pitch_bitshift;
+      dstp[dp] = (dst_pixel_t*) dst->GetWritePtr(dst_planes[dp]);
     }
     
     write_2plane_to_3plane <src_pixel_t, dst_pixel_t> \
@@ -680,7 +679,7 @@ private:
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         int a = srcp[0][x], b = srcp[1][x];
-        int ab = b << srcBitDepth + a;
+        int ab = (b << srcBitDepth) + a;
         dstp[0][x] = lutp[0][ab];
         dstp[1][x] = lutp[1][ab];
         dstp[2][x] = lutp[2][ab];
@@ -704,13 +703,13 @@ private:
       for (int i = 0; i < 3; ++i) {
         int sc = min(i, num_src_clips),
             sp = min(num_src_clips == 1 ? i : dp, num_src_planes);
-        src_pitch[i] = src[sc]->GetPitch(src_planes[sp]) >> src_pitch_bitshift;
-        srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sp]);
+        src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
+        srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
       }
       
       const dst_pixel_t* lutp = (const dst_pixel_t*) lut->GetReadPtr(dst_planes[dp]);
       int dst_pitch = dst->GetPitch(dst_planes[dp]) >> dst_pitch_bitshift;
-      dst_pixel_t* dstp = (dst_pixel_t*) dst->GetWritePtr(dst_planes[dp])
+      dst_pixel_t* dstp = (dst_pixel_t*)dst->GetWritePtr(dst_planes[dp]);
       
       write_3plane_to_1plane <src_pixel_t, dst_pixel_t> \
       (src_pitch, srcp, dst_pitch, lutp, dstp, dst_width[dp], dst_height[dp]);
@@ -727,7 +726,7 @@ private:
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         int a = srcp[0][x], b = srcp[1][x], c = srcp[2][x];
-        dstp[x] = lutp[(c << 8 + b) << 8 + a];
+        dstp[x] = lutp[(((c << 8) + b) << 8) + a];
       }
       srcp[0] += src_pitch[0];
       srcp[1] += src_pitch[1];
@@ -743,16 +742,11 @@ private:
     int src_pitch[3];
     const src_pixel_t* srcp[3];
     
-    if (num_src_clips == 1) {
-      for (int p = 0; p < num_src_planes; ++p) {
-        src_pitch[p] = src[0]->GetPitch(src_planes[p]) >> src_pitch_bitshift;
-        srcp[p] = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[p]);
-      }
-    } else {
-      for (int c = 0; c < num_src_clips; ++c) {
-        src_pitch[c] = src[c]->GetPitch(src_planes[0]) >> src_pitch_bitshift;
-        srcp[c] = (const src_pixel_t*) src[c]->GetReadPtr(src_planes[0]);
-      }
+    for (int i = 0; i < 3; ++i) {
+      int sc = min(i, num_src_clips),
+          sp = min(num_src_clips == 1 ? i : 0, num_src_planes);
+      src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
+      srcp[i] = (const src_pixel_t*)src[sc]->GetReadPtr(src_planes[sc][sp]);
     }
     
     const dst_pixel_t* lutp[3];
@@ -765,7 +759,7 @@ private:
       dstp[p] = (dst_pixel_t*) dst->GetWritePtr(dst_planes[p]);
     }
     
-    write_2plane_to_3plane <src_pixel_t, dst_pixel_t> \
+    write_3plane_to_3plane <src_pixel_t, dst_pixel_t> \
     (src_pitch, srcp, dst_pitch, lutp, dstp, dst_width[0], dst_height[0]);
     
   }
@@ -779,7 +773,7 @@ private:
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         int a = srcp[0][x], b = srcp[1][x], c = srcp[2][x];
-        int abc = (c << 8 + b) << 8 + a;
+        int abc = (((c << 8) + b) << 8) + a;
         dstp[0][x] = lutp[0][abc];
         dstp[1][x] = lutp[1][abc];
         dstp[2][x] = lutp[2][abc];
@@ -794,16 +788,13 @@ private:
     
   }
   
-  // Pointer to wrapper function
-  void (*wrapper_to_use) (std::vector<PVideoFrame>& src, PVideoFrame dst);
-  
 public:
   
   ApplyLUT(PClip _child, std::vector<PClip> _src_clips, PClip _lut_clip, int _mode, IScriptEnvironment* env) : GenericVideoFilter(_child), src_clips(_src_clips), lut_clip(_lut_clip), mode(_mode) {
     
-    fillVariables(env);
+    fillSrcAndLutInfo(env);
     setDstFormatAndWrapperFunction(env);
-    prepareDstInfo();
+    fillDstInfo();
   
   }
   
