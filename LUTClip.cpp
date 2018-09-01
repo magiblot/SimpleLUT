@@ -6,12 +6,7 @@
 #include <cmath>
 #include <stdint.h>
 
-#define RUN_TEMPLATE1(bitDepth, template_function) \
-  bitDepth == 8 ?  template_function <uint8_t> () : \
-  bitDepth == 32 ? template_function <uint32_t> () : \
-                   template_function <uint16_t> ()
-
-#define PICK_TEMPLATE2(srcBitDepth, dstBitDepth, template_function) \
+#define PICK_TEMPLATE(srcBitDepth, dstBitDepth, template_function) \
   srcBitDepth == 8 ? \
     dstBitDepth == 8 ?  template_function <uint8_t,uint8_t> : \
     dstBitDepth == 32 ? template_function <uint8_t,uint32_t> : \
@@ -72,7 +67,7 @@ private:
   
 public:
 
-  LUTClip(int dimensions, const char* plane_string, int src_num, int bitDepth, IScriptEnvironment* env) {
+    LUTClip(const char* plane_string, int dimensions, int bitDepth, int src_num, IScriptEnvironment* env) {
     
     if (dimensions == 2) {
       if(bitDepth > 12)
@@ -112,7 +107,7 @@ public:
       env->ThrowError("LUTClip: Invalid selection of planes.");
     
     num_planes = (int) planes.size();
-    clip_id = src_num;
+    clip_id = dimensions == 1 ? 0 : src_num - 1;
     num_values = 1 << bitDepth;
     width = (int) pow(num_values, dimensions);
     height = 1;
@@ -125,7 +120,9 @@ public:
     
     frame = env->NewVideoFrame(vi);
     
-    RUN_TEMPLATE1(bitDepth, write_planar_lut);
+    bitDepth == 8 ?  write_planar_lut<uint8_t>() :
+    bitDepth == 32 ? write_planar_lut<uint32_t>() :
+                     write_planar_lut<uint16_t>();
     
   }
 
@@ -137,10 +134,8 @@ public:
   
   static AVSValue __cdecl Create_LUTClip(AVSValue args, void*, IScriptEnvironment* env) {
     if (!args[0].Defined())
-      env->ThrowError("LUTClip: Parameter \"dimensions\" was not given a value.");
-    if (!args[1].Defined())
-      env->ThrowError("LUTClip: Parameter \"planes\" was not given a value.");
-    return new LUTClip(args[0].AsInt(), args[1].AsString(), args[2].AsInt(1), args[3].AsInt(8), env);
+        env->ThrowError("LUTClip: Parameter \"planes\" was not given a value.");
+    return new LUTClip(args[0].AsString(), args[1].AsInt(1), args[2].AsInt(8), args[3].AsInt(1), env);
   }
   
 };
@@ -330,7 +325,7 @@ private:
           vi.pixel_type = vi_lut.pixel_type;
         } else
           vi.pixel_type = generateSubsampledPixelType(env);
-        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_1plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_1plane_wrapper);
         break;
       case 2:
         if (lut_dimensions != 1)
@@ -346,10 +341,10 @@ private:
         takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
         wrapper_to_use = vi.pixel_type&(VideoInfo::CS_BGR24|VideoInfo::CS_BGR48) ?
-                          PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgb_wrapper)
+                          PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgb_wrapper)
                         : vi.pixel_type&(VideoInfo::CS_BGR32|VideoInfo::CS_BGR64) ?
-                          PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgba_wrapper)
-                        : PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_wrapper);
+                          PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgba_wrapper)
+                        : PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_wrapper);
         break;
       case 3:
         if (lut_dimensions != 2)
@@ -367,7 +362,7 @@ private:
           vi.pixel_type = vi_lut.pixel_type;
         } else
           vi.pixel_type = generateSubsampledPixelType(env);
-        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_1plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_1plane_wrapper);
         break;
       case 4:
         if (lut_dimensions != 2)
@@ -384,7 +379,7 @@ private:
           env->ThrowError("ApplyLUT: Mode 4 doesn't support an interleaved destination format.");
         takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
-        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_3plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_2plane_to_3plane_wrapper);
         break;
       case 5: 
         if (lut_dimensions != 3)
@@ -407,7 +402,7 @@ private:
           vi.pixel_type = vi_lut.pixel_type;
         else // num_src_clips == 3 && num_src_planes == 3
           vi.pixel_type = generateSubsampledPixelType(env);
-        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_1plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_1plane_wrapper);
         break;
       case 6:
         if (lut_dimensions != 3)
@@ -430,7 +425,7 @@ private:
         } else // num_src_clips == 3
           takeFirstPlaneFromEachSource();
         vi.pixel_type = vi_lut.pixel_type;
-        wrapper_to_use = PICK_TEMPLATE2(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_3plane_wrapper);
+        wrapper_to_use = PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_3plane_to_3plane_wrapper);
         break;
     }
   }
@@ -836,7 +831,7 @@ const AVS_Linkage *AVS_linkage = 0;
 extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit3(IScriptEnvironment* env, AVS_Linkage* vectors)
 {
   AVS_linkage = vectors;
-  env->AddFunction("LUTClip", "[dimensions]i[bit_depth]i[planes]s[src_num]i", LUTClip::Create_LUTClip, 0);
+  env->AddFunction("LUTClip", "[planes]s[dimensions]i[bit_depth]i[src_num]i", LUTClip::Create_LUTClip, 0);
   env->AddFunction("ApplyLUT", "c*[mode]i", ApplyLUT::Create, 0);
   return 0;
 }
