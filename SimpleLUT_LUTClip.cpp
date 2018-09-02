@@ -1,6 +1,6 @@
 #include "SimpleLUT.hpp"
   
-template<typename pixel_t> void LUTClip::write_planar_lut() {
+template<typename pixel_t> void LUTClip::write_planar_lut() const {
   int value_repetitions = (int) pow(num_values, clip_id);
   pixel_t mask = (pixel_t) (num_values - 1);
   for (int p = 0; p < num_planes; ++p) {
@@ -77,7 +77,9 @@ LUTClip::LUTClip(const char* plane_string, int dimensions, int bitDepth, int src
 PVideoFrame __stdcall LUTClip::GetFrame(int n, IScriptEnvironment* env) { return frame; }
 bool __stdcall LUTClip::GetParity(int n) { return false; }
 const VideoInfo& __stdcall LUTClip::GetVideoInfo() { return vi; }
-int __stdcall LUTClip::SetCacheHints(int cachehints,int frame_range) { return 0; }
+int __stdcall LUTClip::SetCacheHints(int cachehints,int frame_range) {
+  return cachehints == CACHE_GET_MTMODE ? MT_NICE_FILTER : 0;
+}
 void __stdcall LUTClip::GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env) {}
 
 AVSValue __cdecl LUTClip::Create_LUTClip(AVSValue args, void*, IScriptEnvironment* env) {

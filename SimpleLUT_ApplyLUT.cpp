@@ -16,6 +16,10 @@ PVideoFrame __stdcall ApplyLUT::GetFrame(int n, IScriptEnvironment* env) {
   return dst;
   
 }
+
+int __stdcall ApplyLUT::SetCacheHints(int cachehints,int frame_range) {
+  return cachehints == CACHE_GET_MTMODE ? MT_NICE_FILTER : 0;
+}
   
 AVSValue __cdecl ApplyLUT::Create(AVSValue args, void*, IScriptEnvironment* env) {
   

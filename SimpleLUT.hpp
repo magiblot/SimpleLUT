@@ -39,7 +39,7 @@ private:
   planes_rgb = {PLANAR_R, PLANAR_G, PLANAR_B},
   planes_rgba = {PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A};
   
-  template<typename pixel_t> void write_planar_lut();
+  template<typename pixel_t> void write_planar_lut() const;
   
 public:
 
@@ -75,7 +75,7 @@ private:
   std::vector<int> dst_planes, dst_width, dst_height;
   
   // Pointer to wrapper function
-  void(ApplyLUT::*wrapper_to_use) (std::vector<PVideoFrame>& src, PVideoFrame& dst);
+  void(ApplyLUT::*wrapper_to_use) (std::vector<PVideoFrame>& src, PVideoFrame& dst) const;
 
   const std::vector<int>
   no_planes = {0},
@@ -109,6 +109,7 @@ public:
   
   ApplyLUT(PClip _child, std::vector<PClip> _src_clips, PClip _lut_clip, int _mode, IScriptEnvironment* env);
   PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
+  int __stdcall SetCacheHints(int cachehints,int frame_range);
   static AVSValue __cdecl Create(AVSValue args, void*, IScriptEnvironment* env);
   
 };
