@@ -1,8 +1,8 @@
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_1plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_1plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   for (int dp = 0; dp < num_dst_planes; ++dp) {
-    int sp = min(dp, num_src_planes),
-        sc = min(dp, num_src_clips);
+    int sp = min(dp, num_src_planes - 1),
+        sc = min(dp, num_src_clips - 1);
       
     int src_pitch = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
     const src_pixel_t* srcp = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
@@ -31,7 +31,7 @@ static void write_1plane_to_1plane
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_1plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_1plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   
   int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
   const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
@@ -73,7 +73,7 @@ static void write_1plane_to_3plane
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_1plane_to_3plane_packed_rgb_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_1plane_to_3plane_packed_rgb_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   
   int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
   const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
@@ -109,7 +109,7 @@ static void write_1plane_to_3plane_packed_rgb
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_1plane_to_3plane_packed_rgba_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_1plane_to_3plane_packed_rgba_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   
   int src_pitch = src[0]->GetPitch(src_planes[0][0]) >> src_pitch_bitshift;
   const src_pixel_t* srcp = (const src_pixel_t*) src[0]->GetReadPtr(src_planes[0][0]);
@@ -145,7 +145,7 @@ static void write_1plane_to_3plane_packed_rgba
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_2plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_2plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   for (int dp = 0; dp < num_dst_planes; ++dp) {
     
     const dst_pixel_t* lutp = (const dst_pixel_t*) lut->GetReadPtr(dst_planes[dp]);
@@ -156,8 +156,8 @@ void write_2plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame&
     const src_pixel_t* srcp[2];
     
     for (int i = 0; i < 2; ++i) {
-      int sc = min(i, num_src_clips),
-          sp = min(dp, num_src_planes);
+      int sc = min(i, num_src_clips - 1),
+          sp = min(dp, num_src_planes - 1);
       src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
       srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
     }
@@ -187,13 +187,13 @@ static void write_2plane_to_1plane
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_2plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_2plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   
   int src_pitch[2];
   const src_pixel_t* srcp[2];
   
   for (int i = 0; i < 2; ++i) {
-    int sc = min(i, num_src_clips);
+    int sc = min(i, num_src_clips - 1);
     src_pitch[i] = src[sc]->GetPitch(src_planes[sc][0]) >> src_pitch_bitshift;
     srcp[i] = (const src_pixel_t*)src[sc]->GetReadPtr(src_planes[sc][0]);
   }
@@ -237,15 +237,15 @@ static void write_2plane_to_3plane
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_3plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_3plane_to_1plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   for (int dp = 0; dp < num_dst_planes; ++dp) {
     
     int src_pitch[3];
     const src_pixel_t* srcp[3];
     
     for (int i = 0; i < 3; ++i) {
-      int sc = min(i, num_src_clips),
-          sp = min(num_src_clips == 1 ? i : dp, num_src_planes);
+      int sc = min(i, num_src_clips - 1),
+          sp = min(num_src_clips == 1 ? i : dp, num_src_planes - 1);
       src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
       srcp[i] = (const src_pixel_t*) src[sc]->GetReadPtr(src_planes[sc][sp]);
     }
@@ -280,14 +280,14 @@ static void write_3plane_to_1plane
 }
 
 template <typename src_pixel_t, typename dst_pixel_t>
-void write_3plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) {
+void write_3plane_to_3plane_wrapper (std::vector<PVideoFrame>& src, PVideoFrame& dst) const {
   
   int src_pitch[3];
   const src_pixel_t* srcp[3];
   
   for (int i = 0; i < 3; ++i) {
-    int sc = min(i, num_src_clips),
-        sp = min(num_src_clips == 1 ? i : 0, num_src_planes);
+    int sc = min(i, num_src_clips - 1),
+        sp = min(num_src_clips == 1 ? i : 0, num_src_planes - 1);
     src_pitch[i] = src[sc]->GetPitch(src_planes[sc][sp]) >> src_pitch_bitshift;
     srcp[i] = (const src_pixel_t*)src[sc]->GetReadPtr(src_planes[sc][sp]);
   }
