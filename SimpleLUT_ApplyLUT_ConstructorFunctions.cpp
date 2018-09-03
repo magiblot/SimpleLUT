@@ -173,9 +173,9 @@ void ApplyLUT::setDstFormatAndWrapperFunction(IScriptEnvironment* env) {
         env->ThrowError("ApplyLUT: Mode 2 doesn't support YUV interleaved destination formats.");
       takeFirstPlaneFromEachSource();
       vi.pixel_type = vi_lut.pixel_type;
-      wrapper_to_use = vi.pixel_type&(VideoInfo::CS_BGR24|VideoInfo::CS_BGR48) ?
+      wrapper_to_use = vi.IsRGB24() || vi.IsRGB48() ?
                         PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgb_wrapper)
-                      : vi.pixel_type&(VideoInfo::CS_BGR32|VideoInfo::CS_BGR64) ?
+                      : vi.IsRGB32() || vi.IsRGB64() ?
                         PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_packed_rgba_wrapper)
                       : PICK_TEMPLATE(srcBitDepth, dstBitDepth, &ApplyLUT::write_1plane_to_3plane_wrapper);
       break;
