@@ -16,15 +16,10 @@ void ApplyLUT::fillSrcAndLutInfo(IScriptEnvironment* env) {
   num_src_clips = (int) src_clips.size();
   vi_src = std::vector<VideoInfo> (num_src_clips);
   src_planes = std::vector<std::vector<int>> (num_src_clips);
-  int min_num_planes = 3;
+  int min_num_planes = MAX_NUM_PLANES;
   for (int sc = 0; sc < num_src_clips; ++sc) {
     vi_src[sc] = src_clips[sc]->GetVideoInfo();
-    src_planes[sc] = vi_src[sc].pixel_type&VideoInfo::CS_INTERLEAVED ? no_planes
-                    : vi_src[sc].IsY() ? planes_y
-                    : vi_src[sc].IsYUV() ? planes_yuv
-                    : vi_src[sc].IsYUVA() ? planes_yuva
-                    : vi_src[sc].IsPlanarRGB() ? planes_rgb
-                    : planes_rgba;
+    src_planes[sc] = getPlanesVector(vi_src[sc], "some source clip", env);
     min_num_planes = min((int) src_planes[sc].size(), min_num_planes);
   }
   num_src_planes = min_num_planes;
@@ -54,12 +49,8 @@ void ApplyLUT::fillSrcAndLutInfo(IScriptEnvironment* env) {
   lut_dimensions = (int) lut_dimensions_d;
   if (lut_dimensions_d - lut_dimensions != 0.0)
     env->ThrowError("ApplyLUT: The provided LUT clip was expected to have a width of %d pixels,\ndue to the source bit depth being %d, but got %d pixels instead.", src_num_values, srcBitDepth, vi_lut.width);
-  num_lut_planes = (int) (vi_lut.pixel_type&VideoInfo::CS_INTERLEAVED ? no_planes.size()
-                        : vi_lut.IsY() ? planes_y.size()
-                        : vi_lut.IsYUV()  ? planes_yuv.size()
-                        : vi_lut.IsYUVA()  ? planes_yuva.size()
-                        : vi_lut.IsPlanarRGB() ? planes_rgb.size()
-                        : planes_rgba.size());
+  num_lut_planes = min((int) (getPlanesVector(vi_lut, "the LUT clip", env).size()),
+                       MAX_NUM_PLANES);
   
   dstBitDepth = vi_lut.BitsPerComponent();    
   src_pitch_bitshift = pitchBitShift(srcBitDepth);
@@ -82,15 +73,15 @@ bool ApplyLUT::conditionNotFulfilled(Condition cond) const {
       break;
     case SRC_NOT_INTERLEAVED:
       for (int c = 0; c < num_src_clips; ++c)
-        if (vi_src[c].pixel_type&VideoInfo::CS_INTERLEAVED && !vi_src[c].IsY())
+        if (!vi_src[c].IsPlanar())
           return true;
       break;
     case DST_NOT_INTERLEAVED:
-      if (vi_lut.pixel_type&VideoInfo::CS_INTERLEAVED && !vi_lut.IsY())
+      if (!vi_lut.IsPlanar())
         return true;
       break;
     case DST_NOT_YUV_INTERLEAVED:
-      if (vi_lut.pixel_type&(VideoInfo::CS_INTERLEAVED|VideoInfo::CS_YUV|VideoInfo::CS_YUVA) && !vi_lut.IsY())
+      if (!vi_lut.IsPlanar() && (vi_lut.IsYUV() || vi_lut.IsYUVA()))
         return true;
       break;
   }
@@ -103,13 +94,7 @@ void ApplyLUT::takeFirstPlaneFromEachSource() {
 
 int ApplyLUT::generateSubsampledPixelType(IScriptEnvironment* env) {
   
-  if (num_src_clips == 1) {
-    if (num_src_planes == 1 || vi_src[0].Is444() || vi_src[0].IsRGB())
-      return vi_lut.pixel_type;
-    else if (vi_lut.IsRGB())
-      env->ThrowError("ApplyLUT: Can't use all the planes of a subsampled YUV source\nwhen the LUT clip is RGB.");
-    return vi_src[0].pixel_type;
-  } else if (num_src_clips == 3 && num_src_planes == 1) {
+  if (num_src_clips == 3 && num_src_planes == 1) {
     if (src_width[0][0] == src_width[1][0] && src_width[1][0] == src_width[2][0]
       && src_height[0][0] == src_height[1][0] && src_height[1][0] == src_height[2][0])
       return vi_lut.pixel_type;
@@ -142,6 +127,10 @@ int ApplyLUT::generateSubsampledPixelType(IScriptEnvironment* env) {
     
     return pixel_type;
   } else {
+    if (!conditionNotFulfilled(SRC_NO_SUBSAMPLING)) // if no sources are subsampled
+      return vi_lut.pixel_type;
+    else if (vi_lut.IsRGB())
+      env->ThrowError("ApplyLUT: Can't use all the planes of a subsampled YUV source\nwhen the LUT clip is RGB.");
     for (int sp = 0; sp < num_src_planes; ++sp) {
       for (int sc = 1; sc < num_src_clips; ++sc)
         if (src_width[sc][sp] != src_width[0][sp])
@@ -174,8 +163,8 @@ void ApplyLUT::setDstFormatAndWrapperFunction(IScriptEnvironment* env) {
     case 2:
       if (lut_dimensions != 1)
         env->ThrowError("ApplyLUT: Mode 2 requires a 1D LUT clip, but got a %dD one instead.", lut_dimensions);
-      if (num_lut_planes < 3)
-        env->ThrowError("ApplyLUT: In mode 2, the LUT clip cannot have only 1 plane (Y).");
+      if (vi_lut.IsY())
+        env->ThrowError("ApplyLUT: In mode 2, the LUT clip cannot be Y.");
       if (num_src_clips != 1)
         env->ThrowError("ApplyLUT: Mode 2 can only accept 1 source clip, but got %d instead.", num_src_clips);
       if (conditionNotFulfilled(SRC_NOT_INTERLEAVED))
@@ -276,13 +265,8 @@ void ApplyLUT::setDstFormatAndWrapperFunction(IScriptEnvironment* env) {
 
 void ApplyLUT::fillDstInfo() {
     
-  dst_planes = vi.pixel_type&VideoInfo::CS_INTERLEAVED ? no_planes
-              : vi.IsY() ? planes_y
-              : vi.IsYUV()  ? planes_yuv
-              : vi.IsYUVA()  ? planes_yuva
-              : vi.IsPlanarRGB() ? planes_rgb
-              : planes_rgba;
-  num_dst_planes = (int) dst_planes.size();
+  dst_planes = getPlanesVector(vi, 0, 0);
+  num_dst_planes = min((int) dst_planes.size(), MAX_NUM_PLANES);
   
   dst_width = std::vector<int>(num_dst_planes);
   dst_height = std::vector<int>(num_dst_planes);
