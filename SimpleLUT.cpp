@@ -1,9 +1,5 @@
 #include "SimpleLUT.hpp"
 
-int bitDepthID(int bitDepth) {
-  return bitDepth == 8 ? 0 : bitDepth == 32 ? 2 : 1;
-}
-
 int getPixelTypeAccordingToBitDepth(int generic_flag, int bitDepth) {
   switch (bitDepth) {
     case  8 : return generic_flag | VideoInfo::CS_Sample_Bits_8;
@@ -14,6 +10,17 @@ int getPixelTypeAccordingToBitDepth(int generic_flag, int bitDepth) {
     case 32 : return generic_flag | VideoInfo::CS_Sample_Bits_32;
   }
   return 0;
+}
+
+const std::vector<int> getPlanesVector(const VideoInfo& vi, const char* description, IScriptEnvironment* env) {
+  if (!vi.IsPlanar()) return no_planes;
+  if (vi.IsY()) return planes_y;
+  if (vi.IsYUV()) return planes_yuv;
+  if (vi.IsYUVA()) return planes_yuva;
+  if (vi.IsPlanarRGB()) return planes_rgb;
+  if (vi.IsPlanarRGBA()) return planes_rgba;
+  env->ThrowError("ApplyLUT: Unsupported colorspace of %s.", description);
+  return no_planes;
 }
 
 const AVS_Linkage *AVS_linkage = 0;

@@ -16,9 +16,15 @@
     dstBitDepth == 32 ? template_function <uint16_t,uint32_t> : \
                         template_function <uint16_t,uint16_t>
 
-int bitDepthID(int bitDepth);
-
+#define no_planes std::vector<int>({0})
+#define planes_y std::vector<int>({PLANAR_Y})
+#define planes_yuv std::vector<int>({PLANAR_Y, PLANAR_U, PLANAR_V})
+#define planes_yuva std::vector<int>({PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A})
+#define planes_rgb std::vector<int>({PLANAR_R, PLANAR_G, PLANAR_B})
+#define planes_rgba std::vector<int>({PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A})
+  
 int getPixelTypeAccordingToBitDepth(int generic_flag, int bitDepth);
+const std::vector<int> getPlanesVector(const VideoInfo& vi, const char* description, IScriptEnvironment* env);
 
 class LUTClip : public IClip {
 
@@ -31,13 +37,6 @@ private:
   int num_planes, num_values;
   std::vector<int> planes;
   int clip_id;
-  
-  const std::vector<int>
-  planes_y = {PLANAR_Y},
-  planes_yuv = {PLANAR_Y, PLANAR_U, PLANAR_V},
-  planes_yuva = {PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A},
-  planes_rgb = {PLANAR_R, PLANAR_G, PLANAR_B},
-  planes_rgba = {PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A};
   
   template<typename pixel_t> void write_planar_lut() const;
   
@@ -76,14 +75,8 @@ private:
   
   // Pointer to wrapper function
   void(ApplyLUT::*wrapper_to_use) (std::vector<PVideoFrame>& src, PVideoFrame& dst) const;
-
-  const std::vector<int>
-  no_planes = {0},
-  planes_y = {PLANAR_Y},
-  planes_yuv = {PLANAR_Y, PLANAR_U, PLANAR_V},
-  planes_yuva = {PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A},
-  planes_rgb = {PLANAR_R, PLANAR_G, PLANAR_B},
-  planes_rgba = {PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A};
+  
+  const int MAX_NUM_PLANES = 3;
   
   enum Condition {
     SRC_SAME_RES,
