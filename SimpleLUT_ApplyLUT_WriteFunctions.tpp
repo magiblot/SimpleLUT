@@ -22,10 +22,16 @@ static void write_1plane_to_1plane
   int width, int height) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp, 64);
+    __assume_aligned(lutp, 64);
+    __assume_aligned(dstp, 64);
+#endif
     for (int x = 0; x < width; ++x)
       dstp[x] = lutp[srcp[x]];
-      srcp += src_pitch;
-      dstp += dst_pitch;
+    srcp += src_pitch;
+    dstp += dst_pitch;
   }
   
 }
@@ -58,6 +64,16 @@ static void write_1plane_to_3plane
   int width, int height) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp, 64);
+    __assume_aligned(lutp[0], 64);
+    __assume_aligned(lutp[1], 64);
+    __assume_aligned(lutp[2], 64);
+    __assume_aligned(dstp[0], 64);
+    __assume_aligned(dstp[1], 64);
+    __assume_aligned(dstp[2], 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int s = srcp[x];
       dstp[0][x] = lutp[0][s];
@@ -96,6 +112,12 @@ static void write_1plane_to_3plane_packed_rgb
   srcp += height * src_pitch;
   for (int y = 0; y < height; ++y) {
     srcp -= src_pitch;
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp, 64);
+    __assume_aligned(lutp, 64);
+    __assume_aligned(dstp, 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int s = srcp[x];
       int strideBGRdst = x*3, strideBGRlut = s*3;
@@ -132,6 +154,12 @@ static void write_1plane_to_3plane_packed_rgba
   srcp += height * src_pitch;
   for (int y = 0; y < height; ++y) {
     srcp -= src_pitch;
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp, 64);
+    __assume_aligned(lutp, 64);
+    __assume_aligned(dstp, 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int s = srcp[x];
       int strideBGRdst = x << 2, strideBGRlut = s << 2;
@@ -175,6 +203,13 @@ static void write_2plane_to_1plane
   int width, int height, int srcBitDepth) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp[0], 64);
+    __assume_aligned(srcp[1], 64);
+    __assume_aligned(lutp, 64);
+    __assume_aligned(dstp, 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int a = srcp[0][x], b = srcp[1][x];
       dstp[x] = lutp[(b << srcBitDepth) + a];
@@ -220,6 +255,17 @@ static void write_2plane_to_3plane
   int width, int height, int srcBitDepth) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp[0], 64);
+    __assume_aligned(srcp[1], 64);
+    __assume_aligned(lutp[0], 64);
+    __assume_aligned(lutp[1], 64);
+    __assume_aligned(lutp[2], 64);
+    __assume_aligned(dstp[0], 64);
+    __assume_aligned(dstp[1], 64);
+    __assume_aligned(dstp[2], 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int a = srcp[0][x], b = srcp[1][x];
       int ab = (b << srcBitDepth) + a;
@@ -267,6 +313,14 @@ static void write_3plane_to_1plane
   int width, int height) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp[0], 64);
+    __assume_aligned(srcp[1], 64);
+    __assume_aligned(srcp[2], 64);
+    __assume_aligned(lutp, 64);
+    __assume_aligned(dstp, 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int a = srcp[0][x], b = srcp[1][x], c = srcp[2][x];
       dstp[x] = lutp[(((c << 8) + b) << 8) + a];
@@ -314,6 +368,18 @@ static void write_3plane_to_3plane
   int width, int height) {
   
   for (int y = 0; y < height; ++y) {
+#ifdef __INTEL_COMPILER
+    #pragma ivdep
+    __assume_aligned(srcp[0], 64);
+    __assume_aligned(srcp[1], 64);
+    __assume_aligned(srcp[2], 64);
+    __assume_aligned(lutp[0], 64);
+    __assume_aligned(lutp[1], 64);
+    __assume_aligned(lutp[2], 64);
+    __assume_aligned(dstp[0], 64);
+    __assume_aligned(dstp[1], 64);
+    __assume_aligned(dstp[2], 64);
+#endif
     for (int x = 0; x < width; ++x) {
       int a = srcp[0][x], b = srcp[1][x], c = srcp[2][x];
       int abc = (((c << 8) + b) << 8) + a;
