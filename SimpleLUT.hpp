@@ -20,8 +20,8 @@
 #define planes_y std::vector<int>({PLANAR_Y})
 #define planes_yuv std::vector<int>({PLANAR_Y, PLANAR_U, PLANAR_V})
 #define planes_yuva std::vector<int>({PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A})
-#define planes_rgb std::vector<int>({PLANAR_G, PLANAR_B, PLANAR_R})
-#define planes_rgba std::vector<int>({PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A})
+#define planes_rgb std::vector<int>({PLANAR_R, PLANAR_G, PLANAR_B})
+#define planes_rgba std::vector<int>({PLANAR_R, PLANAR_G, PLANAR_B, PLANAR_A})
   
 int getPixelTypeAccordingToBitDepth(int generic_flag, int bitDepth);
 const std::vector<int> getPlanesVector(const VideoInfo& vi, const char* description, IScriptEnvironment* env);
@@ -36,7 +36,7 @@ private:
   int width, height;
   int num_planes, num_values;
   std::vector<int> planes;
-  int clip_id;
+  int src_num;
   
   template<typename pixel_t> void write_planar_lut() const;
   
