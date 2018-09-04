@@ -1,10 +1,12 @@
 #include "SimpleLUT.hpp"
 
-ApplyLUT::ApplyLUT(PClip _child, std::vector<PClip> _src_clips, PClip _lut_clip, int _mode, IScriptEnvironment* env) : GenericVideoFilter(_child), src_clips(_src_clips), lut_clip(_lut_clip), mode(_mode) {
+ApplyLUT::ApplyLUT(PClip _child, std::vector<PClip> _src_clips, PClip _lut_clip, int _mode, bool _optMakeWritable, IScriptEnvironment* env) : GenericVideoFilter(_child), src_clips(_src_clips), lut_clip(_lut_clip), mode(_mode), optMakeWritable(_optMakeWritable) {
   
   fillSrcAndLutInfo(env);
   setDstFormatAndWrapperFunction(env);
   fillDstInfo();
+  findWritableCandidates();
+  
 #ifdef ENABLE_CONSTRUCTOR_TESTING
   constructorTesting(env);
 #endif
@@ -273,9 +275,25 @@ void ApplyLUT::fillDstInfo() {
   dst_width[0] = vi.width;
   dst_height[0] = vi.height;
   for (int dp = 1; dp < num_dst_planes; ++dp) {
-    dst_width[dp] = dst_width[0] >> vi.VideoInfo::GetPlaneWidthSubsampling(dst_planes[dp]);
-    dst_height[dp] = dst_height[0] >> vi.VideoInfo::GetPlaneHeightSubsampling(dst_planes[dp]);
+    dst_width[dp] = dst_width[0] >> vi.GetPlaneWidthSubsampling(dst_planes[dp]);
+    dst_height[dp] = dst_height[0] >> vi.GetPlaneHeightSubsampling(dst_planes[dp]);
   }
   
 }
   
+void ApplyLUT::findWritableCandidates() {
+  if (optMakeWritable && srcBitDepth == dstBitDepth) {
+    for (int sc = 0; sc < num_src_clips; ++sc) {
+      if ((int) src_planes[sc].size() >= num_dst_planes) {
+        bool valid = true;
+        for (int dp = 0; valid && dp < num_dst_planes; ++dp)
+          valid = (src_planes[sc][dp] == dst_planes[dp]
+                && src_width[sc][dp] == dst_width[dp]
+                && src_height[sc][dp] == dst_height[dp]);
+        if (valid)
+          writable_candidates.push_back(sc);
+      }
+    }
+  }
+  num_writable_candidates = (int) writable_candidates.size();
+}

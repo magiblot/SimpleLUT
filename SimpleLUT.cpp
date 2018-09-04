@@ -28,6 +28,6 @@ extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit3(IScri
 {
   AVS_linkage = vectors;
   env->AddFunction("LUTClip", "[planes]s[dimensions]i[bit_depth]i[src_num]i", LUTClip::Create_LUTClip, 0);
-  env->AddFunction("ApplyLUT", "c*[mode]i", ApplyLUT::Create, 0);
+  env->AddFunction("ApplyLUT", "c*[mode]i[optMakeWritable]b", ApplyLUT::Create, 0);
   return 0;
 }

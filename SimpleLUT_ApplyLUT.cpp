@@ -9,11 +9,26 @@ PVideoFrame __stdcall ApplyLUT::GetFrame(int n, IScriptEnvironment* env) {
   std::vector<PVideoFrame> src(num_src_clips);
   for (int sc = 0; sc < num_src_clips; ++sc)
     src[sc] = src_clips[sc]->GetFrame(n, env);
-  PVideoFrame dst = env->NewVideoFrame(vi);
   
-  (this->*wrapper_to_use)(src, dst);
+  int writable_clip = -1;
+  for (int wc = 0; writable_clip == -1 && wc < num_writable_candidates; ++wc) {
+    if (src[wc]->IsWritable())
+      writable_clip = wc;
+  }
   
-  return dst;
+  PVideoFrame newframe;
+  PVideoFrame* dst;
+  if (writable_clip == -1) {
+    newframe = env->NewVideoFrame(vi);
+    dst = &newframe;
+  } else {
+    env->MakeWritable(&src[writable_clip]);
+    dst = &src[writable_clip];
+  }
+  
+  (this->*wrapper_to_use)(src, *dst);
+  
+  return *dst;
   
 }
 
@@ -37,7 +52,7 @@ AVSValue __cdecl ApplyLUT::Create(AVSValue args, void*, IScriptEnvironment* env)
   if (mode < 1 || 6 < mode)
     env->ThrowError("ApplyLUT: \"mode\" must be an integer from 1 to 6.");
   
-  return new ApplyLUT(src_clips[0], src_clips, lut_clip, mode, env);
+  return new ApplyLUT(src_clips[0], src_clips, lut_clip, mode, args[2].AsBool(true), env);
 }
 #ifdef ENABLE_CONSTRUCTOR_TESTING
 void ApplyLUT::constructorTesting(IScriptEnvironment* env) {
