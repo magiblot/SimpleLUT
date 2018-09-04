@@ -282,7 +282,8 @@ void ApplyLUT::fillDstInfo() {
 }
   
 void ApplyLUT::findWritableCandidates() {
-  if (optMakeWritable && srcBitDepth == dstBitDepth) {
+  if (optMakeWritable && srcBitDepth == dstBitDepth
+    && !(mode == 5 && num_src_clips == 1 && num_src_planes == 3 && num_dst_planes == 3)) {
     for (int sc = 0; sc < num_src_clips; ++sc) {
       if ((int) src_planes[sc].size() >= num_dst_planes) {
         bool valid = true;
