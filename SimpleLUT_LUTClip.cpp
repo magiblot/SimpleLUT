@@ -1,4 +1,17 @@
 #include "SimpleLUT.hpp"
+
+#include <string.h>
+
+#ifndef _MSC_VER
+
+#include <strings.h>
+
+static int stricmp(const char *a, const char *b) noexcept
+{
+    return strcasecmp(a, b);
+}
+
+#endif // _MSC_VER
   
 template<typename pixel_t> void LUTClip::write_planar_lut() const {
   pixel_t mask = (pixel_t) (num_values - 1);
@@ -19,15 +32,15 @@ LUTClip::LUTClip(const char* plane_string, int dimensions, int bitDepth, int _sr
   
   memset(&vi, 0, sizeof(VideoInfo));
   
-  if (lstrcmpi(plane_string, "Y") == 0)
+  if (stricmp(plane_string, "Y") == 0)
     vi.pixel_type = getPixelTypeAccordingToBitDepth(VideoInfo::CS_GENERIC_Y, bitDepth);
-  else if (lstrcmpi(plane_string, "YUV") == 0)
+  else if (stricmp(plane_string, "YUV") == 0)
     vi.pixel_type = getPixelTypeAccordingToBitDepth(VideoInfo::CS_GENERIC_YUV444, bitDepth);
-  else if (lstrcmpi(plane_string, "YUVA") == 0)
+  else if (stricmp(plane_string, "YUVA") == 0)
     vi.pixel_type = getPixelTypeAccordingToBitDepth(VideoInfo::CS_GENERIC_YUVA444, bitDepth);
-  else if (lstrcmpi(plane_string, "RGB") == 0)
+  else if (stricmp(plane_string, "RGB") == 0)
     vi.pixel_type = getPixelTypeAccordingToBitDepth(VideoInfo::CS_GENERIC_RGBP, bitDepth);
-  else if (lstrcmpi(plane_string, "RGBA") == 0)
+  else if (stricmp(plane_string, "RGBA") == 0)
     vi.pixel_type = getPixelTypeAccordingToBitDepth(VideoInfo::CS_GENERIC_RGBAP, bitDepth);
   else
     env->ThrowError("LUTClip: Invalid selection of planes.");
@@ -59,7 +72,7 @@ const VideoInfo& __stdcall LUTClip::GetVideoInfo() { return vi; }
 int __stdcall LUTClip::SetCacheHints(int cachehints,int frame_range) {
   return cachehints == CACHE_GET_MTMODE ? MT_NICE_FILTER : 0;
 }
-void __stdcall LUTClip::GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env) {}
+void __stdcall LUTClip::GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env) {}
 
 AVSValue __cdecl LUTClip::Create_LUTClip(AVSValue args, void*, IScriptEnvironment* env) {
   

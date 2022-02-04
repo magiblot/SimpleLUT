@@ -22,7 +22,7 @@ void ApplyLUT::fillSrcAndLutInfo(IScriptEnvironment* env) {
   for (int sc = 0; sc < num_src_clips; ++sc) {
     vi_src[sc] = src_clips[sc]->GetVideoInfo();
     src_planes[sc] = getPlanesVector(vi_src[sc], "some source clip", env);
-    min_num_planes = min((int) src_planes[sc].size(), min_num_planes);
+    min_num_planes = std::min((int) src_planes[sc].size(), min_num_planes);
   }
   num_src_planes = min_num_planes;
   
@@ -51,7 +51,7 @@ void ApplyLUT::fillSrcAndLutInfo(IScriptEnvironment* env) {
   lut_dimensions = (int) lut_dimensions_d;
   if (lut_dimensions_d - lut_dimensions != 0.0)
     env->ThrowError("ApplyLUT: The provided LUT clip was expected to have a width of %d pixels,\ndue to the source bit depth being %d, but got %d pixels instead.", src_num_values, srcBitDepth, vi_lut.width);
-  num_lut_planes = min((int) (getPlanesVector(vi_lut, "the LUT clip", env).size()),
+  num_lut_planes = std::min((int) (getPlanesVector(vi_lut, "the LUT clip", env).size()),
                        MAX_NUM_PLANES);
   
   dstBitDepth = vi_lut.BitsPerComponent();    
@@ -268,7 +268,7 @@ void ApplyLUT::setDstFormatAndWrapperFunction(IScriptEnvironment* env) {
 void ApplyLUT::fillDstInfo() {
     
   dst_planes = getPlanesVector(vi, 0, 0);
-  num_dst_planes = min((int) dst_planes.size(), MAX_NUM_PLANES);
+  num_dst_planes = std::min((int) dst_planes.size(), MAX_NUM_PLANES);
   
   dst_width = std::vector<int>(num_dst_planes);
   dst_height = std::vector<int>(num_dst_planes);

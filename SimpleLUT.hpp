@@ -1,10 +1,10 @@
 #pragma warning (disable : 4100)
 
-#include "windows.h"
 #include "avisynth.h"
 #include <vector>
 #include <cmath>
 #include <stdint.h>
+#include <algorithm>
 
 #define PICK_TEMPLATE(srcBitDepth, dstBitDepth, template_function) \
  (srcBitDepth == 8 ? \
@@ -48,7 +48,7 @@ public:
   bool __stdcall GetParity(int n);
   const VideoInfo& __stdcall GetVideoInfo();
   int __stdcall SetCacheHints(int cachehints,int frame_range);
-  void __stdcall GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env);
+  void __stdcall GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env);
   
   static AVSValue __cdecl Create_LUTClip(AVSValue args, void*, IScriptEnvironment* env);
   
